@@ -1,4 +1,3 @@
-import { AcceptedImageExtensions, MaximumImageBytes } from "../../Shared/Constants";
 import type { AppearanceData, SearchResultData } from "../../Shared/Types";
 import type { Collection } from "../Models/Collection";
 import type { Song } from "../Models/Song";
@@ -10,7 +9,6 @@ import { ApiError } from "../Services/ApiClient";
 import { el, replaceChildren } from "../Utils/Dom";
 import { formatTime, pluralize } from "../Utils/Format";
 import { icon } from "../Utils/Icons";
-import { PresetImages, presetDataUrl } from "../Utils/Presets";
 import type { AppContext } from "./AppContext";
 import { showLimitDialog, showLoginDialog } from "./Dialogs";
 
@@ -92,6 +90,10 @@ export function showAddDialog(context: AppContext, target: Collection | null, in
     try {
       const result = await context.imports.readAudioFiles(files);
       const created = await context.library.addSongs(result.inputs, target, progress);
+      if (created.length > 0 && target !== null) {
+        const firstNode = target.songs.head;
+        if (firstNode !== null) await context.player.playFrom(target.songs, firstNode);
+      }
       finish(`Se agregó ${pluralize(created.length, "canción", "canciones")}.${result.ignored > 0 ? ` Se omitieron ${result.ignored} archivos no compatibles.` : ""}`);
     } catch (error) {
       fail(error, audio.length);
@@ -111,7 +113,11 @@ export function showAddDialog(context: AppContext, target: Collection | null, in
     const progress = showProgress("Leyendo carpeta…");
     try {
       const { name, result } = await context.imports.readFolder(files);
-      await context.library.importCollection({ kind: "folder", name, inputs: result.inputs }, progress);
+      const collection = await context.library.importCollection({ kind: "folder", name, inputs: result.inputs }, progress);
+      if (!collection.songs.isEmpty) {
+        const firstNode = collection.songs.head;
+        if (firstNode !== null) await context.player.playFrom(collection.songs, firstNode);
+      }
       finish(`Carpeta "${name}" importada con ${pluralize(result.inputs.length, "canción", "canciones")}.`);
     } catch (error) {
       fail(error, audio.length);
@@ -335,75 +341,34 @@ export function showAddDialog(context: AppContext, target: Collection | null, in
 
 
 
-type AppearanceTarget = "app" | "songBackground" | "songCover";
-
 const SwatchColors = ["#4f46e5", "#a21caf", "#f43f5e", "#f59e0b", "#10b981", "#06b6d4"];
 
-export function showAppearanceDialog(context: AppContext, song: Song | null = null, initialTab?: "color" | "image"): void {
-  let target: AppearanceTarget = song === null ? "app" : "songBackground";
-  let tab: "color" | "image" = "color";
-  let draft: AppearanceData = { mode: "default" };
-  let draftFile: File | null = null;
-  let draftFileUrl: string | null = null;
+export function showAppearanceDialog(context: AppContext, song: Song | null = null): void {
+  let draft: AppearanceData = { mode: "color", color: "#4f46e5" };
   let saving = false;
   const content = el("div", { class: "appearanceDialog" });
   const modal = new Modal(content, {
     label: "Personalizar apariencia",
-    className: "medium",
-    onClose: () => {
-      if (draftFileUrl !== null) URL.revokeObjectURL(draftFileUrl);
-    }
+    className: "medium"
   });
   const error = el("p", { class: "formError", role: "alert", hidden: true });
 
   const currentFor = (): AppearanceData => {
-    if (target === "app") return context.appearance.appearance;
-    return song?.appearance ?? { mode: "default" };
+    if (song === null) {
+      const app = context.appearance.appearance;
+      if (app.mode === "color" && app.color) return app;
+      if (app.mode === "default") return { mode: "color", color: "#4f46e5" };
+      return { mode: "color", color: "#4f46e5" };
+    }
+    const s = song?.appearance;
+    if (s && s.mode === "color" && s.color) return s;
+    return { mode: "color", color: "#4f46e5" };
   };
-  draft = { ...currentFor() };
-  if (draft.mode === "image" || draft.mode === "preset") tab = "image";
-  if (initialTab !== undefined) tab = initialTab;
+  draft = currentFor();
 
-  const previewSource = (): { kind: "none" | "color" | "image"; value: string } => {
-    if (draft.mode === "image" && draftFileUrl !== null) return { kind: "image", value: draftFileUrl };
-    if (draft.mode === "image" && draftFile === null) {
-      const local = target === "app" ? null : song?.localBackgroundUrl ?? null;
-      return context.appearance.resolve(draft, local ?? (target === "app" ? context.appearance.resolveGlobal().value : null));
-    }
-    return context.appearance.resolve(draft, null);
-  };
-
-  const chooseImage = async (): Promise<void> => {
-    const files = await pickFiles({ accept: "image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp", multiple: false, directory: false });
-    const file = files[0];
-    if (file === undefined) return;
-    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
-    error.hidden = true;
-    if (!(AcceptedImageExtensions as readonly string[]).includes(extension) || !file.type.startsWith("image/")) {
-      showError("Formato no permitido. Usa PNG, JPG, JPEG o WEBP.");
-      return;
-    }
-    if (file.size > MaximumImageBytes) {
-      showError("La imagen supera el tamaño máximo de 8 MB.");
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    const valid = await new Promise<boolean>((resolve) => {
-      const probe = new Image();
-      probe.onload = () => resolve(true);
-      probe.onerror = () => resolve(false);
-      probe.src = url;
-    });
-    if (!valid) {
-      URL.revokeObjectURL(url);
-      showError("No pudimos leer esa imagen. Elige otro archivo.");
-      return;
-    }
-    if (draftFileUrl !== null) URL.revokeObjectURL(draftFileUrl);
-    draftFile = file;
-    draftFileUrl = url;
-    draft = { mode: "image" };
-    render();
+  const previewSource = (): { kind: "color"; value: string } => {
+    if (draft.mode === "color" && draft.color) return { kind: "color", value: draft.color };
+    return { kind: "color", value: "#4f46e5" };
   };
 
   function showError(message: string): void {
@@ -416,31 +381,10 @@ export function showAppearanceDialog(context: AppContext, song: Song | null = nu
     saving = true;
     error.hidden = true;
     try {
-      if (target === "app") {
-        await context.appearance.setGlobalAppearance(draft, draftFile);
-      } else if (song !== null && target === "songBackground") {
-        if (context.user.isAuthenticated) {
-          const prepared = await context.appearance.prepareAppearance(draft, draftFile);
-          await context.library.updateSong(song, { appearance: draft.mode === "default" ? null : prepared });
-        } else {
-          if (song.localBackgroundUrl !== null) URL.revokeObjectURL(song.localBackgroundUrl);
-          song.localBackgroundUrl = draft.mode === "image" && draftFile !== null ? URL.createObjectURL(draftFile) : null;
-          await context.library.updateSong(song, { appearance: draft.mode === "default" ? null : draft });
-        }
-      } else if (song !== null && target === "songCover") {
-        if (draftFile === null) {
-          showError("Selecciona una imagen desde tu dispositivo.");
-          saving = false;
-          return;
-        }
-        if (context.user.isAuthenticated) {
-          const fileId = await context.appearance.uploadImage(draftFile);
-          await context.library.updateSong(song, { coverFileId: fileId });
-        } else {
-          if (song.localCoverUrl !== null) URL.revokeObjectURL(song.localCoverUrl);
-          song.localCoverUrl = URL.createObjectURL(draftFile);
-          await context.library.updateSong(song, {});
-        }
+      if (song === null) {
+        await context.appearance.setGlobalAppearance(draft, null);
+      } else {
+        await context.library.updateSong(song, { appearance: draft });
       }
       modal.close();
       context.toast("Apariencia aplicada.", "success");
@@ -454,16 +398,10 @@ export function showAppearanceDialog(context: AppContext, song: Song | null = nu
     if (saving) return;
     saving = true;
     try {
-      if (target === "app") {
+      if (song === null) {
         await context.appearance.setGlobalAppearance({ mode: "default" }, null);
-      } else if (song !== null && target === "songBackground") {
-        if (song.localBackgroundUrl !== null) URL.revokeObjectURL(song.localBackgroundUrl);
-        song.localBackgroundUrl = null;
+      } else {
         await context.library.updateSong(song, { appearance: null });
-      } else if (song !== null) {
-        if (song.localCoverUrl !== null) URL.revokeObjectURL(song.localCoverUrl);
-        song.localCoverUrl = null;
-        await context.library.updateSong(song, context.user.isAuthenticated ? { coverFileId: null } : {});
       }
       modal.close();
       context.toast("Apariencia restablecida.", "success");
@@ -474,52 +412,10 @@ export function showAppearanceDialog(context: AppContext, song: Song | null = nu
   };
 
   const render = (): void => {
-    const isCover = target === "songCover";
     const preview = el("div", { class: "appearancePreview", "aria-label": "Vista previa" });
-    const source = isCover ? { kind: "image" as const, value: draftFileUrl ?? "" } : previewSource();
+    const source = previewSource();
     if (source.kind === "color") preview.style.background = source.value;
-    else if (source.kind === "image" && source.value.length > 0) {
-      preview.style.backgroundImage = `url("${source.value}")`;
-      preview.classList.add("hasImage");
-    }
-    preview.appendChild(el("span", { class: "previewLabel" }, source.kind === "none" || (isCover && draftFileUrl === null) ? "Vista previa" : isCover ? "Portada" : "Fondo"));
-
-    const targets: { id: AppearanceTarget; label: string }[] = [{ id: "app", label: "Toda la app" }];
-    if (song !== null) targets.push({ id: "songBackground", label: "Fondo del reproductor" }, { id: "songCover", label: "Portada" });
-    const targetBar =
-      song === null
-        ? null
-        : el(
-            "div",
-            { class: "segmented", role: "tablist", "aria-label": "Dónde aplicar" },
-            ...targets.map((item) =>
-              el("button", { class: item.id === target ? "selected" : "", type: "button", role: "tab", "aria-selected": item.id === target, onClick: () => {
-                target = item.id;
-                draft = target === "songCover" ? { mode: "default" } : { ...currentFor() };
-                draftFile = null;
-                if (draftFileUrl !== null) URL.revokeObjectURL(draftFileUrl);
-                draftFileUrl = null;
-                if (target === "songCover") tab = "image";
-                else tab = draft.mode === "image" || draft.mode === "preset" ? "image" : "color";
-                render();
-              } }, item.label)
-            )
-          );
-
-    const tabBar = isCover
-      ? null
-      : el(
-          "div",
-          { class: "segmented", role: "tablist" },
-          el("button", { class: tab === "color" ? "selected" : "", type: "button", role: "tab", "aria-selected": tab === "color", onClick: () => {
-            tab = "color";
-            render();
-          } }, "Color"),
-          el("button", { class: tab === "image" ? "selected" : "", type: "button", role: "tab", "aria-selected": tab === "image", onClick: () => {
-            tab = "image";
-            render();
-          } }, "Imagen")
-        );
+    preview.appendChild(el("span", { class: "previewLabel" }, "Vista previa"));
 
     const colorPanel = el(
       "div",
@@ -541,37 +437,12 @@ export function showAppearanceDialog(context: AppContext, song: Song | null = nu
       )
     );
 
-    const imagePanel = el(
-      "div",
-      { class: "stack" },
-      isCover ? null : el("p", { class: "eyebrow" }, "Imágenes de Battito"),
-      isCover
-        ? null
-        : el(
-            "div",
-            { class: "presetGrid" },
-            ...PresetImages.map((preset) =>
-              el("button", { class: `presetItem ${draft.mode === "preset" && draft.presetId === preset.id ? "selected" : ""}`, type: "button", title: preset.name, "aria-label": preset.name, "aria-pressed": draft.mode === "preset" && draft.presetId === preset.id, style: { backgroundImage: `url("${presetDataUrl(preset)}")` }, onClick: () => {
-                draft = { mode: "preset", presetId: preset.id };
-                draftFile = null;
-                if (draftFileUrl !== null) URL.revokeObjectURL(draftFileUrl);
-                draftFileUrl = null;
-                render();
-              } })
-            )
-          ),
-      el("button", { class: "button outline block", type: "button", onClick: () => void chooseImage() }, icon("upload", 18), el("span", {}, "Desde mi dispositivo")),
-      draftFile === null ? null : el("p", { class: "muted small" }, `Imagen seleccionada: ${draftFile.name}`)
-    );
-
     const apply$ = el("button", { class: "button primary block", type: "button", onClick: () => void apply() }, "Aplicar");
     replaceChildren(
       content,
       el("h2", {}, "Personalizar apariencia"),
-      targetBar,
-      tabBar,
       preview,
-      tab === "color" && !isCover ? colorPanel : imagePanel,
+      colorPanel,
       error,
       apply$,
       el("div", { class: "buttonRow" }, button("Cancelar", () => modal.close(), "outline"), button("Restablecer", () => void reset(), "ghost"))

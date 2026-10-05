@@ -22,7 +22,7 @@ export function createAuthenticationRoutes(authentication: AuthenticationService
     skip: () => !rateLimitEnabled,
     message: { code: "TooManyRequests", message: "Demasiados intentos. Espera unos minutos e inténtalo de nuevo." }
   });
-  const cookieOptions = { httpOnly: true, sameSite: "lax" as const, secure: secureCookies, maxAge: 30 * 24 * 60 * 60 * 1000, path: "/" };
+  const cookieOptions = { httpOnly: true, sameSite: ("lax" as const), secure: true, maxAge: 30 * 24 * 60 * 60 * 1000, path: "/" };
 
   router.post(
     "/register",

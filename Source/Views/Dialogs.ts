@@ -195,46 +195,6 @@ export function showRenameDialog(context: AppContext, collection: Collection): v
   });
 }
 
-export function showSongEditDialog(context: AppContext, song: Song): void {
-  const title = el("input", { type: "text", maxLength: 200, value: song.title, "data-autofocus": true });
-  const artist = el("input", { type: "text", maxLength: 200, value: song.artist });
-  const lyrics = el("textarea", { rows: 7, maxLength: 20000, placeholder: "Pega aquí una letra que tengas derecho a usar. Se guardará solo en tu biblioteca." });
-  lyrics.value = song.lyrics ?? "";
-  const error = el("p", { class: "formError", role: "alert", hidden: true });
-  const save = el("button", { class: "button primary block", type: "submit" }, "Guardar cambios");
-  const form = el(
-    "form",
-    { class: "stack", noValidate: true },
-    el("h2", {}, "Editar información"),
-    el("label", { class: "field" }, el("span", {}, "Título"), title),
-    el("label", { class: "field" }, el("span", {}, "Artista"), artist),
-    el("label", { class: "field" }, el("span", {}, "Letra (opcional)"), lyrics),
-    error,
-    save
-  );
-  const modal = new Modal(form, { label: "Editar información" });
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (title.value.trim().length === 0) {
-      error.textContent = "La canción necesita un título.";
-      error.hidden = false;
-      return;
-    }
-    save.disabled = true;
-    context.library
-      .updateSong(song, { title: title.value.trim(), artist: artist.value.trim(), lyrics: lyrics.value.trim().length > 0 ? lyrics.value : null })
-      .then(() => {
-        modal.close();
-        context.toast("Información actualizada.", "success");
-      })
-      .catch((failure: unknown) => {
-        save.disabled = false;
-        error.textContent = failure instanceof ApiError ? failure.message : "No pudimos guardar los cambios.";
-        error.hidden = false;
-      });
-  });
-}
-
 export function showAddToPlaylistDialog(context: AppContext, song: Song): void {
   if (!context.requireAuthentication("Inicia sesión para organizar tus canciones en playlists.")) return;
   const list = el("div", { class: "stack" });

@@ -13,7 +13,6 @@ import { icon, logoMark } from "./Utils/Icons";
 import type { AppContext, SearchContext, View } from "./Views/AppContext";
 import { CollectionView } from "./Views/CollectionView";
 import { showLimitDialog, showLoginDialog } from "./Views/Dialogs";
-import { DevicesView } from "./Views/DevicesView";
 import { HomeView } from "./Views/HomeView";
 import { LibraryView } from "./Views/LibraryView";
 import { PlayerView } from "./Views/PlayerView";
@@ -31,7 +30,6 @@ const navigationItems: NavigationItem[] = [
   { id: "home", label: "Inicio", route: "#/home", iconName: "home" },
   { id: "search", label: "Buscar", route: "#/search", iconName: "search" },
   { id: "library", label: "Biblioteca", route: "#/library", iconName: "library" },
-  { id: "devices", label: "Dispositivos", route: "#/devices", iconName: "devices" },
   { id: "settings", label: "Ajustes", route: "#/settings", iconName: "settings" }
 ];
 
@@ -249,9 +247,7 @@ export class BattitoApplication implements AppContext {
       case "library":
         this.view = new LibraryView(this);
         break;
-      case "devices":
-        this.view = new DevicesView(this);
-        break;
+
       case "settings":
         this.view = new SettingsView(this);
         break;

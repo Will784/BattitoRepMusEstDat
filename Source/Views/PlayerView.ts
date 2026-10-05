@@ -6,7 +6,7 @@ import { el } from "../Utils/Dom";
 import { formatTime, parseSongName } from "../Utils/Format";
 import { icon } from "../Utils/Icons";
 import type { AppContext } from "./AppContext";
-import { showSongEditDialog } from "./Dialogs";
+
 import { showAppearanceDialog } from "./MediaDialogs";
 import { showSongMenu } from "./Menus";
 
@@ -100,7 +100,7 @@ export class PlayerView {
       { class: "playerActions" },
       this.lyricsButton,
       el("button", { class: "playerAction", type: "button", onClick: () => this.withSong((song) => showAppearanceDialog(this.context, song, "color")) }, icon("color", 22), el("span", {}, "Color")),
-      el("button", { class: "playerAction", type: "button", onClick: () => this.withSong((song) => showAppearanceDialog(this.context, song, "image")) }, icon("image", 22), el("span", {}, "Fondo")),
+
       el("button", { class: "playerAction", type: "button", onClick: (event: Event) => this.withSong((song) => showSongMenu(this.context, song, event.currentTarget as HTMLElement, () => undefined)) }, icon("more", 22), el("span", {}, "Más"))
     );
     this.element = el(
@@ -123,6 +123,10 @@ export class PlayerView {
     );
     this.element.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && this.opened && document.querySelector(".modalBackdrop") === null) this.close();
+      if (event.key === " " && this.opened && document.querySelector(".modalBackdrop") === null) {
+        event.preventDefault();
+        void this.context.player.togglePlayback();
+      }
     });
     context.player.on("songchange", (song) => this.renderSong(song));
     context.player.on("playing", () => this.renderControls());
@@ -320,16 +324,16 @@ export class PlayerView {
     }
 
     this.lyricsBody.append(
-      el("p", { class: "lyricsNote" }, state.status === "error" ? (state.message ?? "No pudimos consultar la letra.") : "No encontramos la letra de esta canción."),
-      el("button", { class: "button outline", type: "button", onClick: () => showSongEditDialog(this.context, song) }, "Escribir la letra")
+      el("p", { class: "lyricsNote" }, state.status === "error" ? (state.message ?? "No pudimos consultar la letra.") : "No encontramos la letra de esta canción.")
     );
   }
 
   private updateActiveLyricsLine(time: number): void {
     if (this.parsedLyrics.length === 0) return;
+    const adjustedTime = time + 0.5;
     let activeIndex = 0;
     for (let i = 0; i < this.parsedLyrics.length; i++) {
-      if (this.parsedLyrics[i]!.time <= time) {
+      if (this.parsedLyrics[i]!.time <= adjustedTime) {
         activeIndex = i;
       } else {
         break;

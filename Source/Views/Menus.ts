@@ -4,7 +4,7 @@ import { PopoverMenu } from "../Components/Popover";
 import { pluralize } from "../Utils/Format";
 import { icon } from "../Utils/Icons";
 import type { AppContext } from "./AppContext";
-import { showAddToPlaylistDialog, showConfirm, showRenameDialog, showSongEditDialog } from "./Dialogs";
+import { showAddToPlaylistDialog, showConfirm, showRenameDialog } from "./Dialogs";
 import { showAppearanceDialog } from "./MediaDialogs";
 
 export function showSongMenu(context: AppContext, song: Song, anchor: HTMLElement, onPlay: () => void): void {
@@ -13,7 +13,7 @@ export function showSongMenu(context: AppContext, song: Song, anchor: HTMLElemen
       { label: "Reproducir", iconNode: icon("play", 16), onSelect: onPlay },
       { label: "Agregar a playlist", iconNode: icon("playlist", 16), onSelect: () => showAddToPlaylistDialog(context, song) },
       { label: "Personalizar", iconNode: icon("color", 16), onSelect: () => showAppearanceDialog(context, song) },
-      { label: "Editar información", iconNode: icon("lyrics", 16), onSelect: () => showSongEditDialog(context, song) },
+
       {
         label: "Eliminar",
         iconNode: icon("trash", 16),
