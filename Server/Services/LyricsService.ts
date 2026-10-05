@@ -83,10 +83,10 @@ export class LyricsService {
       if (!response.ok) return { status: "error", text: null };
       const body = (await response.json()) as { plainLyrics?: string; syncedLyrics?: string; lyrics?: string };
       let text: string | null = null;
-      if (typeof body.plainLyrics === "string" && body.plainLyrics.trim().length > 0) {
+      if (typeof body.syncedLyrics === "string" && body.syncedLyrics.trim().length > 0) {
+        text = body.syncedLyrics.replace(/\r\n/g, "\n").trim();
+      } else if (typeof body.plainLyrics === "string" && body.plainLyrics.trim().length > 0) {
         text = body.plainLyrics.trim();
-      } else if (typeof body.syncedLyrics === "string" && body.syncedLyrics.trim().length > 0) {
-        text = this.cleanSyncedLyrics(body.syncedLyrics);
       } else if (typeof body.lyrics === "string" && body.lyrics.trim().length > 0) {
         text = body.lyrics.replace(/\r\n/g, "\n").trim();
       }
@@ -110,11 +110,11 @@ export class LyricsService {
       const list = (await response.json()) as Array<{ plainLyrics?: string; syncedLyrics?: string }>;
       if (!Array.isArray(list)) return { status: "ok", text: null };
       for (const item of list) {
+        if (typeof item.syncedLyrics === "string" && item.syncedLyrics.trim().length > 0) {
+          return { status: "ok", text: item.syncedLyrics.replace(/\r\n/g, "\n").trim() };
+        }
         if (typeof item.plainLyrics === "string" && item.plainLyrics.trim().length > 0) {
           return { status: "ok", text: item.plainLyrics.trim() };
-        }
-        if (typeof item.syncedLyrics === "string" && item.syncedLyrics.trim().length > 0) {
-          return { status: "ok", text: this.cleanSyncedLyrics(item.syncedLyrics) };
         }
       }
       return { status: "ok", text: null };
