@@ -90,9 +90,14 @@ export function showAddDialog(context: AppContext, target: Collection | null, in
     try {
       const result = await context.imports.readAudioFiles(files);
       const created = await context.library.addSongs(result.inputs, target, progress);
-      if (created.length > 0 && target !== null) {
-        const firstNode = target.songs.head;
-        if (firstNode !== null) await context.player.playFrom(target.songs, firstNode);
+      if (created.length > 0) {
+        if (target !== null) {
+          const firstNode = target.songs.head;
+          if (firstNode !== null) await context.player.playFrom(target.songs, firstNode);
+        } else {
+          const firstNode = context.library.songs.head;
+          if (firstNode !== null) await context.player.playFrom(context.library.songs, firstNode);
+        }
       }
       finish(`Se agregó ${pluralize(created.length, "canción", "canciones")}.${result.ignored > 0 ? ` Se omitieron ${result.ignored} archivos no compatibles.` : ""}`);
     } catch (error) {
@@ -137,7 +142,11 @@ export function showAddDialog(context: AppContext, target: Collection | null, in
     const progress = showProgress("Leyendo archivos…");
     try {
       const { name, result } = await context.imports.readPlaylist(files, playlistName.value);
-      await context.library.importCollection({ kind: "playlist", name, inputs: result.inputs }, progress);
+      const collection = await context.library.importCollection({ kind: "playlist", name, inputs: result.inputs }, progress);
+      if (!collection.songs.isEmpty) {
+        const firstNode = collection.songs.head;
+        if (firstNode !== null) await context.player.playFrom(collection.songs, firstNode);
+      }
       finish(`Playlist "${name}" importada con ${pluralize(result.inputs.length, "canción", "canciones")}.`);
     } catch (error) {
       fail(error, audio.length);
