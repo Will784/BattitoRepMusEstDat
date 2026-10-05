@@ -208,6 +208,15 @@ export class BattitoApplication implements AppContext {
     this.player.on("playing", () => this.scheduleRefresh());
     this.player.on("error", (message) => this.toast(message, "error"));
     this.appearance.on("changed", () => this.renderChrome());
+    document.addEventListener("keydown", (event: KeyboardEvent) => {
+      if (event.code !== "Space") return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "BUTTON" || target.tagName === "SELECT")) return;
+      if (this.playerView.isOpen) {
+        event.preventDefault();
+        void this.player.togglePlayback();
+      }
+    });
   }
 
   private async handleUserChange(authenticated: boolean): Promise<void> {

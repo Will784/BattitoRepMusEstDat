@@ -330,7 +330,9 @@ export class PlayerView {
 
   private updateActiveLyricsLine(time: number): void {
     if (this.parsedLyrics.length === 0) return;
-    const adjustedTime = time + 0.5;
+    const isYoutube = this.context.player.song?.source === "youtube";
+    const offset = isYoutube ? 1.2 : 0.3;
+    const adjustedTime = time + offset;
     let activeIndex = 0;
     for (let i = 0; i < this.parsedLyrics.length; i++) {
       if (this.parsedLyrics[i]!.time <= adjustedTime) {
@@ -364,7 +366,7 @@ export class PlayerView {
     let targetTop = centerScrollTop(activeItem);
     const nextItem = this.parsedLyrics[activeIndex + 1];
     if (nextItem !== undefined && nextItem.time > activeItem.time) {
-      const progress = Math.max(0, Math.min(1, (time - activeItem.time) / (nextItem.time - activeItem.time)));
+      const progress = Math.max(0, Math.min(1, (adjustedTime - activeItem.time) / (nextItem.time - activeItem.time)));
       targetTop += (centerScrollTop(nextItem) - targetTop) * progress;
     }
     const maximumTop = Math.max(0, this.lyricsBody.scrollHeight - this.lyricsBody.clientHeight);
