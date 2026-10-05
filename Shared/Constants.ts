@@ -1,0 +1,10 @@
+export const GuestSongLimit = 3;
+export const MinimumPasswordLength = 8;
+export const MaximumImageBytes = 8 * 1024 * 1024;
+export const MaximumAudioBytes = 80 * 1024 * 1024;
+export const AcceptedImageMimeTypes = ["image/png", "image/jpeg", "image/webp"] as const;
+export const AcceptedImageExtensions = ["png", "jpg", "jpeg", "webp"] as const;
+export const AcceptedAudioExtensions = ["mp3", "m4a", "aac", "wav", "ogg", "oga", "opus", "flac", "weba", "webm"] as const;
+export const HexColorPattern = /^#[0-9a-fA-F]{6}$/;
+export const YouTubeVideoIdPattern = /^[A-Za-z0-9_-]{11}$/;
+export const PresetIds = ["dusk", "aurora", "ocean", "sunset", "glacier", "nebula", "horizon", "bloom", "lagoon", "meadow"] as const;
