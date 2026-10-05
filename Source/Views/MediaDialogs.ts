@@ -525,7 +525,11 @@ export function showAppearanceDialog(context: AppContext, song: Song | null = nu
               onInput: (event: Event) => {
                 const value = (event.target as HTMLInputElement).value;
                 draft = { mode: "color", color: value };
-                if (!colorInputActive) render();
+                const preview = content.querySelector(".appearancePreview") as HTMLElement | null;
+                if (preview) {
+                  preview.style.background = value;
+                  preview.style.backgroundImage = "";
+                }
               },
               onChange: () => {
                 colorInputActive = false;
