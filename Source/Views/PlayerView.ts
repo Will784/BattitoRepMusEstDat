@@ -99,7 +99,7 @@ export class PlayerView {
       "div",
       { class: "playerActions" },
       this.lyricsButton,
-      el("button", { class: "playerAction", type: "button", onClick: () => this.withSong((song) => showAppearanceDialog(this.context, song, "color")) }, icon("color", 22), el("span", {}, "Color")),
+      el("button", { class: "playerAction", type: "button", onClick: () => this.withSong((song) => showAppearanceDialog(this.context, song)) }, icon("color", 22), el("span", {}, "Color")),
 
       el("button", { class: "playerAction", type: "button", onClick: (event: Event) => this.withSong((song) => showSongMenu(this.context, song, event.currentTarget as HTMLElement, () => undefined)) }, icon("more", 22), el("span", {}, "Más"))
     );
