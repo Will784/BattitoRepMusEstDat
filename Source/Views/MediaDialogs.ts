@@ -1,3 +1,4 @@
+import { AcceptedImageExtensions, MaximumImageBytes } from "../../Shared/Constants";
 import type { AppearanceData, SearchResultData } from "../../Shared/Types";
 import type { Collection } from "../Models/Collection";
 import type { Song } from "../Models/Song";
@@ -354,11 +355,17 @@ const SwatchColors = ["#4f46e5", "#a21caf", "#f43f5e", "#f59e0b", "#10b981", "#0
 
 export function showAppearanceDialog(context: AppContext, song: Song | null = null): void {
   let draft: AppearanceData = { mode: "color", color: "#4f46e5" };
+  let draftFile: File | null = null;
+  let draftFileUrl: string | null = null;
   let saving = false;
+  let colorInputActive = false;
   const content = el("div", { class: "appearanceDialog" });
   const modal = new Modal(content, {
     label: "Personalizar apariencia",
-    className: "medium"
+    className: "medium",
+    onClose: () => {
+      if (draftFileUrl !== null) URL.revokeObjectURL(draftFileUrl);
+    }
   });
   const error = el("p", { class: "formError", role: "alert", hidden: true });
 
@@ -366,24 +373,60 @@ export function showAppearanceDialog(context: AppContext, song: Song | null = nu
     if (song === null) {
       const app = context.appearance.appearance;
       if (app.mode === "color" && app.color) return app;
-      if (app.mode === "default") return { mode: "color", color: "#4f46e5" };
+      if (app.mode === "image" && app.fileId) return app;
       return { mode: "color", color: "#4f46e5" };
     }
     const s = song?.appearance;
     if (s && s.mode === "color" && s.color) return s;
+    if (s && s.mode === "image") return s;
     return { mode: "color", color: "#4f46e5" };
   };
   draft = currentFor();
 
-  const previewSource = (): { kind: "color"; value: string } => {
+  const chooseImage = async (): Promise<void> => {
+    const files = await pickFiles({ accept: "image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp", multiple: false, directory: false });
+    const file = files[0];
+    if (file === undefined) return;
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (!(AcceptedImageExtensions as readonly string[]).includes(extension) || !file.type.startsWith("image/")) {
+      error.textContent = "Formato no permitido. Usa PNG, JPG, JPEG o WEBP.";
+      error.hidden = false;
+      return;
+    }
+    if (file.size > MaximumImageBytes) {
+      error.textContent = "La imagen supera el tamaño máximo de 8 MB.";
+      error.hidden = false;
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const valid = await new Promise<boolean>((resolve) => {
+      const probe = new Image();
+      probe.onload = () => resolve(true);
+      probe.onerror = () => resolve(false);
+      probe.src = url;
+    });
+    if (!valid) {
+      URL.revokeObjectURL(url);
+      error.textContent = "No pudimos leer esa imagen. Elige otro archivo.";
+      error.hidden = false;
+      return;
+    }
+    if (draftFileUrl !== null) URL.revokeObjectURL(draftFileUrl);
+    draftFile = file;
+    draftFileUrl = url;
+    draft = { mode: "image" };
+    render();
+  };
+
+  const previewSource = (): { kind: "color" | "image"; value: string } => {
+    if (draft.mode === "image" && draftFileUrl) return { kind: "image", value: draftFileUrl };
+    if (draft.mode === "image" && draftFile === null && song) {
+      const app = song.appearance;
+      if (app?.mode === "image" && app.fileId) return { kind: "image", value: `/api/files/${app.fileId}` };
+    }
     if (draft.mode === "color" && draft.color) return { kind: "color", value: draft.color };
     return { kind: "color", value: "#4f46e5" };
   };
-
-  function showError(message: string): void {
-    error.textContent = message;
-    error.hidden = false;
-  }
 
   const apply = async (): Promise<void> => {
     if (saving) return;
@@ -391,15 +434,21 @@ export function showAppearanceDialog(context: AppContext, song: Song | null = nu
     error.hidden = true;
     try {
       if (song === null) {
-        await context.appearance.setGlobalAppearance(draft, null);
+        await context.appearance.setGlobalAppearance(draft, draftFile);
       } else {
-        await context.library.updateSong(song, { appearance: draft });
+        if (draft.mode === "image" && draftFile) {
+          const fileId = await context.appearance.uploadImage(draftFile);
+          await context.library.updateSong(song, { appearance: { mode: "image", fileId } });
+        } else {
+          await context.library.updateSong(song, { appearance: draft });
+        }
       }
       modal.close();
       context.toast("Apariencia aplicada.", "success");
     } catch (failure) {
       saving = false;
-      showError(failure instanceof ApiError ? failure.message : "No pudimos aplicar los cambios.");
+      error.textContent = failure instanceof ApiError ? failure.message : "No pudimos aplicar los cambios.";
+      error.hidden = false;
     }
   };
 
@@ -416,40 +465,135 @@ export function showAppearanceDialog(context: AppContext, song: Song | null = nu
       context.toast("Apariencia restablecida.", "success");
     } catch (failure) {
       saving = false;
-      showError(failure instanceof ApiError ? failure.message : "No pudimos restablecer la apariencia.");
+      error.textContent = failure instanceof ApiError ? failure.message : "No pudimos restablecer la apariencia.";
+      error.hidden = false;
     }
   };
 
   const render = (): void => {
     const preview = el("div", { class: "appearancePreview", "aria-label": "Vista previa" });
     const source = previewSource();
-    if (source.kind === "color") preview.style.background = source.value;
+    if (source.kind === "color") {
+      preview.style.background = source.value;
+      preview.style.backgroundImage = "";
+    } else if (source.kind === "image" && source.value) {
+      preview.style.backgroundImage = `url("${source.value}")`;
+      preview.classList.add("hasImage");
+    }
     preview.appendChild(el("span", { class: "previewLabel" }, "Vista previa"));
 
-    const colorPanel = el(
+    const tabBar = el(
       "div",
-      { class: "stack" },
-      el("p", { class: "eyebrow" }, "Colores sólidos"),
-      el(
-        "div",
-        { class: "swatches" },
-        ...SwatchColors.map((color) =>
-          el("button", { class: `swatch ${draft.mode === "color" && draft.color === color ? "selected" : ""}`, type: "button", style: { background: color }, "aria-label": `Color ${color}`, "aria-pressed": draft.mode === "color" && draft.color === color, onClick: () => {
-            draft = { mode: "color", color };
-            render();
-          } })
-        ),
-        el("label", { class: "swatch custom", title: "Elegir otro color" }, el("input", { type: "color", value: draft.mode === "color" && draft.color ? draft.color : "#4f46e5", "aria-label": "Color personalizado", onInput: (event: Event) => {
-          draft = { mode: "color", color: (event.target as HTMLInputElement).value };
+      { class: "segmented", role: "tablist" },
+      el("button", { class: draft.mode === "color" ? "selected" : "", type: "button", role: "tab", onClick: () => {
+        if (draft.mode !== "color") {
+          draft = { mode: "color", color: draft.color || "#4f46e5" };
           render();
-        } }), icon("plus", 16))
-      )
+        }
+      } }, "Color"),
+      el("button", { class: draft.mode === "image" ? "selected" : "", type: "button", role: "tab", onClick: () => {
+        if (draft.mode !== "image") {
+          draft = { mode: "image" };
+          render();
+        }
+      } }, "Imagen")
     );
+
+    const colorPanel = draft.mode === "color"
+      ? el(
+          "div",
+          { class: "stack" },
+          el("p", { class: "eyebrow" }, "Colores sólidos"),
+          el(
+            "div",
+            { class: "swatches" },
+            ...SwatchColors.map((color) =>
+              el("button", { class: `swatch ${draft.mode === "color" && draft.color === color ? "selected" : ""}`, type: "button", style: { background: color }, "aria-label": `Color ${color}`, onClick: () => {
+                draft = { mode: "color", color };
+                render();
+              } })
+            ),
+            el("label", {
+              class: "swatch custom",
+              title: "Elegir otro color",
+              onMouseDown: () => { colorInputActive = true; },
+              onMouseUp: () => { colorInputActive = false; }
+            }, el("input", {
+              type: "color",
+              value: draft.mode === "color" && draft.color ? draft.color : "#4f46e5",
+              "aria-label": "Color personalizado",
+              onInput: (event: Event) => {
+                const value = (event.target as HTMLInputElement).value;
+                draft = { mode: "color", color: value };
+                if (!colorInputActive) render();
+              },
+              onChange: () => {
+                colorInputActive = false;
+                render();
+              }
+            }), icon("plus", 16))
+          ),
+          el("div", { class: "stack" }, el("p", { class: "eyebrow" }, "Color personalizado (RGB/HSL)"),
+            el("div", { class: "buttonRow" },
+              el("input", { type: "text", id: "rgbInput", placeholder: "Ej: 79, 70, 229", "aria-label": "Valor RGB", class: "colorTextInput", style: { flex: 1 } }),
+              el("button", { class: "button outline", type: "button", onClick: () => {
+                const input = document.getElementById("rgbInput") as HTMLInputElement | null;
+                if (!input) return;
+                const parts = input.value.split(",").map(s => parseInt(s.trim(), 10));
+                if (parts.length === 3 && parts.every(n => !isNaN(n) && n >= 0 && n <= 255)) {
+                  const hex = "#" + parts.map(n => n.toString(16).padStart(2, "0")).join("");
+                  draft = { mode: "color", color: hex };
+                  render();
+                } else {
+                  error.textContent = "Formato RGB inválido. Usa: R, G, B (ej: 79, 70, 229)";
+                  error.hidden = false;
+                }
+              } }, "Usar RGB"),
+            ),
+            el("div", { class: "buttonRow" },
+              el("input", { type: "text", id: "hslInput", placeholder: "Ej: 238, 66%, 59%", "aria-label": "Valor HSL", class: "colorTextInput", style: { flex: 1 } }),
+              el("button", { class: "button outline", type: "button", onClick: () => {
+                const input = document.getElementById("hslInput") as HTMLInputElement | null;
+                if (!input) return;
+                const parts = input.value.split(",").map(s => {
+                  const trimmed = s.trim().replace("%", "");
+                  return parseFloat(trimmed);
+                });
+                if (parts.length === 3 && parts.every(n => !isNaN(n))) {
+                  const h = ((parts[0] % 360) + 360) % 360;
+                  const s = Math.max(0, Math.min(100, parts[1])) / 100;
+                  const l = Math.max(0, Math.min(100, parts[2])) / 100;
+                  const a = Math.pow(2 * (l < 0.5 ? l : 1 - l) * s, 1);
+                  const f = (n: number) => {
+                    const k = (n + h / 30) % 12;
+                    return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+                  };
+                  const r = Math.round(f(0) * 255).toString(16).padStart(2, "0");
+                  const g = Math.round(f(1) * 255).toString(16).padStart(2, "0");
+                  const b = Math.round(f(2) * 255).toString(16).padStart(2, "0");
+                  draft = { mode: "color", color: `#${r}${g}${b}` };
+                  render();
+                } else {
+                  error.textContent = "Formato HSL inválido. Usa: H, S%, L% (ej: 238, 66%, 59%)";
+                  error.hidden = false;
+                }
+              } }, "Usar HSL")
+            )
+          )
+        )
+      : el(
+          "div",
+          { class: "stack" },
+          el("p", { class: "eyebrow" }, "Imagen de fondo"),
+          el("button", { class: "button outline block", type: "button", onClick: () => void chooseImage() }, icon("upload", 18), el("span", {}, "Desde mi dispositivo")),
+          draftFile === null ? null : el("p", { class: "muted small" }, `Imagen seleccionada: ${draftFile.name}`)
+        );
 
     const apply$ = el("button", { class: "button primary block", type: "button", onClick: () => void apply() }, "Aplicar");
     replaceChildren(
       content,
       el("h2", {}, "Personalizar apariencia"),
+      tabBar,
       preview,
       colorPanel,
       error,
