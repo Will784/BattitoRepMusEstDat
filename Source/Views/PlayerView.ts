@@ -259,6 +259,8 @@ export class PlayerView {
       }
     }
 
+    rawTitle = rawTitle.replace(/\s*\(.*?\)\s*/g, "").replace(/\s*\[.*?\]\s*/g, "").trim();
+
     try {
       const query = new URLSearchParams({ artist: rawArtist, title: rawTitle });
       if (this.context.user.isAuthenticated) query.set("songId", song.id);
@@ -331,9 +333,7 @@ export class PlayerView {
 
   private updateActiveLyricsLine(time: number): void {
     if (this.parsedLyrics.length === 0) return;
-    const isYoutube = this.context.player.song?.source === "youtube";
-    const offset = isYoutube ? 1.2 : 0.3;
-    const adjustedTime = time + offset;
+    const adjustedTime = time + 0.15;
     let activeIndex = 0;
     for (let i = 0; i < this.parsedLyrics.length; i++) {
       if (this.parsedLyrics[i]!.time <= adjustedTime) {
