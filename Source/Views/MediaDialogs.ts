@@ -559,18 +559,20 @@ export function showAppearanceDialog(context: AppContext, song: Song | null = nu
                   const trimmed = s.trim().replace("%", "");
                   return parseFloat(trimmed);
                 });
-                if (parts.length === 3 && parts.every(n => !isNaN(n))) {
-                  const h = ((parts[0] % 360) + 360) % 360;
-                  const s = Math.max(0, Math.min(100, parts[1])) / 100;
-                  const l = Math.max(0, Math.min(100, parts[2])) / 100;
-                  const a = Math.pow(2 * (l < 0.5 ? l : 1 - l) * s, 1);
+                const [hVal, sVal, lVal] = parts;
+                if (parts.length === 3 && hVal !== undefined && sVal !== undefined && lVal !== undefined && parts.every(n => !isNaN(n))) {
+                  const h = ((hVal % 360) + 360) % 360;
+                  const s = Math.max(0, Math.min(100, sVal)) / 100;
+                  const l = Math.max(0, Math.min(100, lVal)) / 100;
+                  const a = 2 * (l < 0.5 ? l : 1 - l) * s;
                   const f = (n: number) => {
                     const k = (n + h / 30) % 12;
-                    return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+                    const colorVal = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+                    return Math.round(colorVal * 255).toString(16).padStart(2, "0");
                   };
-                  const r = Math.round(f(0) * 255).toString(16).padStart(2, "0");
-                  const g = Math.round(f(1) * 255).toString(16).padStart(2, "0");
-                  const b = Math.round(f(2) * 255).toString(16).padStart(2, "0");
+                  const r = f(0);
+                  const g = f(1);
+                  const b = f(2);
                   draft = { mode: "color", color: `#${r}${g}${b}` };
                   render();
                 } else {
