@@ -308,9 +308,10 @@ export class PlayerView {
         const textLines = lines.map((l) => l.trim()).filter((l) => l.length > 0);
         const duration = this.context.player.duration > 0 ? this.context.player.duration : song.durationSeconds;
         const total = textLines.length;
+        const introMargin = duration > 0 ? duration * 0.08 : 5;
 
         textLines.forEach((text, i) => {
-          const time = total > 0 ? (i / total) * (duration > 0 ? duration * 0.92 : 180) : 0;
+          const time = total > 0 ? introMargin + (i / total) * ((duration > 0 ? duration * 0.88 : 180) - introMargin) : 0;
           const lineEl = el("p", { class: "lyricLine", onClick: () => this.context.player.seek(time) }, text);
           this.parsedLyrics.push({ time, element: lineEl });
           this.lyricsBody.append(lineEl);
